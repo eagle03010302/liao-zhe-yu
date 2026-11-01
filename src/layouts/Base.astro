@@ -1,0 +1,32 @@
+---
+import '../styles/global.css';
+import site from '../data/site.json';
+const { title, description = site.tagline } = Astro.props;
+const path = Astro.url.pathname;
+const pageTitle = title ? `${title} — ${site.name} ${site.nameEn}` : `${site.name} ${site.nameEn}`;
+---
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,300&family=Noto+Serif+TC:wght@200;300&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="nav">
+      <a href="/" class="nav-name">{site.name} <span>{site.nameEn}</span></a>
+      <nav aria-label="主要導覽">
+        <a href="/works" aria-current={path.startsWith('/works') ? 'page' : undefined}>作品</a>
+        <a href="/about" aria-current={path.startsWith('/about') ? 'page' : undefined}>關於</a>
+      </nav>
+    </header>
+    <slot />
+  </body>
+</html>

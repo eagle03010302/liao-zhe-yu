@@ -1,0 +1,250 @@
+---
+import Base from '../layouts/Base.astro';
+import { getWorks } from '../lib/works';
+const works = await getWorks();
+---
+<Base>
+  <style is:global>
+    html, body { height: 100%; overflow: hidden; user-select: none; -webkit-user-select: none; }
+    html.no-gl, html.no-gl body { overflow: auto; height: auto; }
+    canvas.plate { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; }
+    .how { position: fixed; top: 52px; right: var(--gutter); font-size: 13px; letter-spacing: .06em; z-index: 2; pointer-events: none; transition: opacity 1s; mix-blend-mode: difference; }
+    .next { position: fixed; bottom: 28px; right: var(--gutter); z-index: 3; font-size: 16px; mix-blend-mode: difference; }
+    .next:hover { text-decoration: underline; text-underline-offset: 5px; }
+    .cap { position: fixed; left: var(--gutter); right: 110px; bottom: 28px; z-index: 2; opacity: 0; transform: translateY(14px); transition: opacity .9s .35s, transform 1.2s .35s; pointer-events: none; text-shadow: 0 0 22px rgba(0, 0, 0, .65); }
+    .cap.on { opacity: 1; transform: none; }
+    .cap.on a { pointer-events: auto; }
+    .cap h2 { font-weight: 200; font-size: clamp(34px, 7vw, 110px); line-height: 1.12; letter-spacing: .02em; }
+    .cap a:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .12em; }
+    .cap p { font-family: var(--latin); font-style: italic; font-size: clamp(16px, 1.5vw, 21px); margin-top: 6px; opacity: .85; }
+    .fallback { display: none; padding: 96px var(--gutter); gap: 48px; }
+    .no-gl .fallback { display: grid; }
+    .no-gl canvas.plate, .no-gl .cap, .no-gl .how, .no-gl .next { display: none; }
+  </style>
+  <noscript><style is:inline>html, body { overflow: auto; height: auto; } .fallback { display: grid !important; } .plate, .cap, .how, .next { display: none !important; }</style></noscript>
+
+  <canvas class="plate" aria-hidden="true"></canvas>
+  <div class="how" aria-hidden="true">載入中</div>
+  <button class="next" type="button" data-next>下一件</button>
+  {works.map((w) => (
+    <div class="cap" data-src={w.data.cover}>
+      <h2><a href={`/works/${w.id}`}>{w.data.title}</a></h2>
+      <p>{w.data.titleEn ? `${w.data.titleEn}, ` : ''}{w.data.year}</p>
+    </div>
+  ))}
+  <section class="fallback" aria-label="作品">
+    {works.map((w) => (
+      <a href={`/works/${w.id}`}>
+        <img src={w.data.cover} alt="" loading="lazy" />
+        <p>{w.data.title}，{w.data.year}</p>
+      </a>
+    ))}
+  </section>
+
+    <script>
+      import { gallery, ease, program, fit, loadAll, bind, srcs, QUAD_VS, NOISE, COVER, type Tex } from '../scripts/stage';
+      import { pixels } from '../scripts/audio';
+      import { createVoice } from '../scripts/resonance-voice';
+      const gl = document.querySelector('canvas')!.getContext('webgl', { alpha: false })!;
+      // No WebGL: the plain list of works underneath stays in charge.
+      if (!gl) {
+        document.documentElement.classList.add('no-gl');
+        throw new Error('WebGL unavailable');
+      }
+
+      // At rest the photo is dust. Sound shakes the dust onto the plate's nodal lines...
+      const dust = program(gl, `attribute vec2 s; uniform sampler2D a,b; uniform float p,t,ra,rb,rs,dpr,e,n,m,fade; uniform vec2 ptr; varying vec3 c; varying float al; ${COVER}
+        float h(vec2 q){ return fract(sin(dot(q,vec2(12.9,78.2)))*43758.5); }
+        float chl(vec2 q){ float f=3.14159; return cos(n*f*q.x)*cos(m*f*q.y)-cos(m*f*q.x)*cos(n*f*q.y); }
+        vec2 settle(vec2 q){ float f=chl(q), d=.002; vec2 g=vec2(chl(q+vec2(d,0.))-f,chl(q+vec2(0.,d))-f)/d; return q-f*g/(dot(g,g)+.8); }
+        void main(){
+          vec3 ca=texture2D(a,cov(s,ra,rs)).rgb, cb=texture2D(b,cov(s,rb,rs)).rgb;
+          float mid=sin(3.14159*p), seed=h(s), seed2=h(s+3.1);
+          vec3 col=mix(ca,cb,smoothstep(seed*.45,seed*.45+.55,p));
+          float lum=dot(col,vec3(.3,.59,.11));
+          float ang=seed*6.283+t*.1+sin(s.y*5.+t*.2)*1.4+sin(s.x*7.-t*.15);
+          vec2 dir=vec2(cos(ang),sin(ang)*rs);
+          vec2 hq=(s-ptr)*vec2(rs,1.);
+          float well=exp(-dot(hq,hq)*30.);
+          vec2 rest=s+dir*(.0009+mid*(.12+seed2*.3)*(1.-abs(seed-.5))+well*(.03+seed2*.08)*(1.-e));
+          vec2 q=s*vec2(rs,1.), r=settle(settle(settle(q)));
+          vec2 node=r/vec2(rs,1.)+dir*.001*sin(t*40.+seed*40.);
+          float reach=clamp(e*1.5*(1.15-seed2*.3),0.,1.);
+          vec2 pos=mix(rest,node,reach*reach*(3.-2.*reach));
+          c=mix(col*1.5+vec3(.022,.02,.018),col*1.2+vec3(.62,.6,.56),e);
+          al=mix(smoothstep(.05,.6,lum)*(.5+seed2*.5)+.012,.3+lum*.5,e)*fade;
+          gl_PointSize=(.9+lum*1.5+well*1.1)*dpr;
+          gl_Position=vec4(pos*2.-1.,0.,1.);
+        }`, `precision mediump float; varying vec3 c; varying float al;
+        void main(){ float d=length(gl_PointCoord-.5); gl_FragColor=vec4(c,al*smoothstep(.5,.1,d)); }`);
+
+      // ...where it melts into liquid metal.
+      const metal = program(gl, QUAD_VS, `precision highp float; varying vec2 v;
+        uniform sampler2D a,b; uniform float p,t,ra,rb,rs,e,n,m,spd,fade; uniform vec2 ptr; ${NOISE} ${COVER}
+        float h(vec2 q){ return fbm(q*1.7+vec2(t*.035,-t*.03)+fbm(q*1.1-t*.02)*1.4); }
+        float chl(vec2 q){ float f=3.14159; return cos(n*f*q.x)*cos(m*f*q.y)-cos(m*f*q.x)*cos(n*f*q.y); }
+        float line(vec2 q,float reach,float thick){ float f=chl(q); return exp(-f*f*thick)*reach; }
+        void main(){
+          vec2 q=v*vec2(rs,1.), mq=ptr*vec2(rs,1.);
+          float s=.006, h0=h(q);
+          vec2 g=vec2(h(q+vec2(s,0.))-h0,h(q+vec2(0.,s))-h0)/s;
+          float d=distance(q,mq), well=exp(-d*d*7.);
+          vec2 radial=normalize(q-mq+.0001);
+          g+=radial*sin(d*30.-t*2.4)*well*.9;
+          float mid=sin(3.14159*p);
+          vec2 off=g*(.007+.16*mid+.03*e+.03*spd);
+          float mask=smoothstep(h0-.14,h0+.14,p*1.5-.25);
+          vec3 A=texture2D(a,cov(v+off+g*.12*p,ra,rs)).rgb;
+          vec3 B=texture2D(b,cov(v+off-g*.12*(1.-p),rb,rs)).rgb;
+          vec3 c=mix(A,B,mask);
+          vec2 w=q+g*(.012+.012*spd)+radial*sin(d*22.-t*3.)*well*.02*e;
+          float beads=.55+.9*fbm(q*3.2+vec2(t*.09,-t*.07));
+          float reach=clamp(e*1.15,0.,1.)*beads;
+          float thick=mix(70.,7.,e);
+          float l0=line(w,reach,thick), ep=.0035;
+          vec2 lg=vec2(line(w+vec2(ep,0.),reach,thick)-l0,line(w+vec2(0.,ep),reach,thick)-l0)/ep;
+          float liquid=smoothstep(.3,.42,l0);
+          float shadow=smoothstep(.08,.34,l0)-liquid;
+          vec3 N=normalize(vec3(-lg*.11-g*.05,1.));
+          float up=N.y*.5+.5;
+          vec3 studio=mix(vec3(.035,.033,.03),vec3(.62,.6,.57),smoothstep(.3,.47,up));
+          studio=mix(studio,vec3(.13,.125,.12),smoothstep(.5,.545,up));
+          studio=mix(studio,vec3(.97,.96,.93),smoothstep(.56,.8,up));
+          vec3 env=mix(texture2D(a,cov(v+N.xy*.28,ra,rs)).rgb,texture2D(b,cov(v+N.xy*.28,rb,rs)).rgb,mask);
+          vec3 chrome=studio*.72+env*.62;
+          float spec=pow(max(dot(N,normalize(vec3(.3,.55,.78))),0.),60.);
+          chrome+=vec3(1.,.98,.94)*spec*.9;
+          chrome=mix(chrome,vec3(.9,.88,.84),pow(1.-N.z,2.)*.3);
+          c*=1.-.62*e;
+          c*=1.-shadow*.6;
+          c=mix(c,chrome,liquid);
+          vec3 nb=normalize(vec3(-g*.55,1.));
+          float sb=pow(max(dot(nb,normalize(vec3(.35,.6,.72))),0.),26.);
+          c+=vec3(.86,.84,.8)*sb*(.1+.55*mid+.5*well)*(1.-liquid);
+          c*=1.-.35*pow(length(v-.5)*1.25,2.5);
+          // Metal only appears inside the melt, spreading from the lines outward.
+          float melt=smoothstep(0.,1.,fade*1.6-(1.-liquid)*.6);
+          gl_FragColor=vec4(c,melt);
+        }`);
+
+      fit(gl);
+      gl.clearColor(.035, .032, .028, 1);
+      gl.enable(gl.BLEND);
+      const quadBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const W = innerWidth > 760 ? 1000 : 340, H = Math.round(W * innerHeight / innerWidth);
+      const points = new Float32Array(W * H * 2);
+      for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        points[i++] = (x + Math.random()) / W;
+        points[i++] = (y + Math.random()) / H;
+      }
+      const pointBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, pointBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, points, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+
+      const sources = srcs();
+      const texs = await loadAll(gl, sources);
+      const COLS = 512, ROWS = 256;
+      const grids = await Promise.all(sources.map((s) => pixels(s, COLS, ROWS)));
+
+      const how = document.querySelector<HTMLElement>('.how')!;
+      how.textContent = '按住並拖動，放開';
+      let voice: ReturnType<typeof createVoice> | undefined;
+      let work = 0;
+      const ptr = { x: -2, y: -2 }, smooth = { x: -2, y: -2 };
+      let down = false, n = 2, m = 3, sn = 2, sm = 3, e = 0, speed = 0, lx = 0, ly = 0;
+      const getVoice = () => {
+        if (!voice) {
+          voice = createVoice(grids, COLS, ROWS);
+          voice.setWork(work);
+        }
+        return voice;
+      };
+      const track = (ev: PointerEvent) => {
+        ptr.x = ev.clientX / innerWidth;
+        ptr.y = 1 - ev.clientY / innerHeight;
+        speed = Math.min(1, speed + Math.hypot(ptr.x - lx, ptr.y - ly) * 5);
+        lx = ptr.x; ly = ptr.y;
+      };
+      const mode = () => {
+        const nn = 1 + Math.floor(Math.max(0, Math.min(.999, ptr.x)) * 8);
+        let mm = 1 + Math.floor(Math.max(0, Math.min(.999, ptr.y)) * 8);
+        if (nn === mm) mm += 1;
+        if (nn !== n || mm !== m) {
+          n = nn; m = mm;
+          voice?.modeChanged(n, m);
+        }
+      };
+      addEventListener('pointerdown', (ev) => {
+        if ((ev.target as Element).closest('a, button')) return;
+        track(ev);
+        down = true;
+        how.style.opacity = '0';
+        getVoice();
+        mode();
+        voice!.modeChanged(n, m);
+        voice!.press(ptr.x, ptr.y);
+      });
+      addEventListener('pointermove', (ev) => {
+        if (ev.pointerType === 'touch' && !down) return;
+        track(ev);
+        if (down) mode();
+      });
+      const up = () => {
+        if (!down) return;
+        down = false;
+        voice?.release();
+      };
+      addEventListener('pointerup', up);
+      addEventListener('pointercancel', up);
+
+      const common = (u: typeof dust, A: Tex, B: Tex, now: number, pe: number) => {
+        u.use();
+        gl.uniform1i(u('a'), 0); gl.uniform1i(u('b'), 1);
+        gl.uniform1f(u('p'), ease(p)); gl.uniform1f(u('t'), now / 1000);
+        gl.uniform1f(u('ra'), A.aspect); gl.uniform1f(u('rb'), B.aspect);
+        gl.uniform1f(u('rs'), innerWidth / innerHeight);
+        gl.uniform1f(u('e'), pe); gl.uniform1f(u('n'), sn); gl.uniform1f(u('m'), sm);
+        gl.uniform2f(u('ptr'), smooth.x, smooth.y);
+      };
+
+      let A = 0, B = 0, p = 0, last = performance.now();
+      gallery(texs.length, (i, prev) => { A = prev; B = i; p = 0; work = i; voice?.setWork(i); }, false);
+      const frame = (now: number) => {
+        const dt = Math.min((now - last) / 1000, .1); last = now;
+        p = Math.min(1, p + dt / 2.4);
+        e = down ? Math.min(1, e + dt * .62) : Math.max(0, e - dt * .36);
+        speed *= Math.exp(-dt * 2.4);
+        sn += (n - sn) * .04; sm += (m - sm) * .04;
+        smooth.x += (ptr.x - smooth.x) * .06; smooth.y += (ptr.y - smooth.y) * .06;
+        voice?.update(dt, Math.max(0, ptr.x), Math.max(0, ptr.y), speed);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        bind(gl, 0, texs[A]); bind(gl, 1, texs[B]);
+
+        const melt = Math.min(1, Math.max(0, (e - .42) / .5));
+        const metalE = melt;
+        if (melt > 0) {
+          common(metal, texs[A], texs[B], now, metalE);
+          gl.uniform1f(metal('spd'), speed); gl.uniform1f(metal('fade'), melt);
+          gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+          gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+        }
+        const dustFade = 1 - Math.min(1, Math.max(0, (e - .55) / .4));
+        if (dustFade > 0) {
+          common(dust, texs[A], texs[B], now, e);
+          gl.uniform1f(dust('fade'), dustFade);
+          gl.uniform1f(dust('dpr'), Math.min(devicePixelRatio, 1.5));
+          gl.bindBuffer(gl.ARRAY_BUFFER, pointBuf);
+          gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+          gl.drawArrays(gl.POINTS, 0, W * H);
+        }
+        requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    </script>
+</Base>

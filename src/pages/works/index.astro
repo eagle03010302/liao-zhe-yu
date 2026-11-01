@@ -1,0 +1,23 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getWorks } from '../../lib/works';
+const works = await getWorks();
+---
+<Base title="作品 Works">
+  <main class="page">
+    <h1 class="page-title">作品</h1>
+    <ol class="index">
+      {works.map((w) => (
+        <li>
+          <a href={`/works/${w.id}`}>
+            <span class="note">{w.data.year}</span>
+            <strong>{w.data.title}</strong>
+            <span class="note index-en">{w.data.titleEn}</span>
+            <span class="note">{w.data.category}{!w.data.public && ' / 未公開'}</span>
+            <img src={w.data.cover} alt="" loading="lazy" />
+          </a>
+        </li>
+      ))}
+    </ol>
+  </main>
+</Base>

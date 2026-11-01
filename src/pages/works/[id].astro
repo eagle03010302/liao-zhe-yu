@@ -1,0 +1,61 @@
+---
+import { render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import site from '../../data/site.json';
+import { getWorks, paragraphs, youtubeId } from '../../lib/works';
+
+export async function getStaticPaths() {
+  const works = await getWorks();
+  return works.map((work, i) => ({
+    params: { id: work.id },
+    props: { work, next: works[(i + 1) % works.length] },
+  }));
+}
+
+const { work, next } = Astro.props;
+const d = work.data;
+const { Content } = await render(work);
+const video = youtubeId(d.video);
+const shows = site.exhibitions.filter((e) => e.works.includes(work.id));
+const facts = [
+  ['年份', d.year], ['類別', d.category], ['媒材', d.medium], ['尺寸', d.dimensions], ['時長', d.duration],
+].filter(([, v]) => v);
+---
+<Base title={d.title} description={d.short}>
+  <main class="detail">
+    <figure class="detail-cover"><img src={d.cover} alt={d.title} /></figure>
+    <header class="detail-head">
+      <h1>{d.title}</h1>
+      {d.titleEn && <p class="note">{d.titleEn}</p>}
+    </header>
+
+    <div class="detail-body">
+      <dl class="facts">
+        {facts.map(([k, v]) => <div><dt class="note">{k}</dt><dd>{v}</dd></div>)}
+        {shows.length > 0 && (
+          <div><dt class="note">展演</dt><dd>{shows.map((s) => <p>{s.year} {s.name}，{s.venue}</p>)}</dd></div>
+        )}
+      </dl>
+      <div class="prose">
+        {paragraphs(d.statement).map((p) => <p>{p}</p>)}
+      </div>
+    </div>
+
+    {video && (
+      <div class="video">
+        <iframe src={`https://www.youtube-nocookie.com/embed/${video}`} title={`${d.title} 影片`} loading="lazy" allowfullscreen></iframe>
+      </div>
+    )}
+
+    {d.images.map((src, i) => (
+      <figure class:list={['still', i % 2 ? 'still-left' : 'still-right']}><img src={src} alt={d.title} loading="lazy" /></figure>
+    ))}
+
+    <div class="detail-long prose"><Content /></div>
+
+    <a class="next" href={`/works/${next.id}`}>
+      <span class="note">下一件</span>
+      <strong>{next.data.title}</strong>
+    </a>
+  </main>
+</Base>

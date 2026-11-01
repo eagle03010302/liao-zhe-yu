@@ -1,0 +1,98 @@
+
+backend:
+  name: github
+  repo: eagle03010302/liao-zhe-yu
+  branch: main
+
+media_folder: public/works
+public_folder: /works
+media_libraries:
+  default:
+    config:
+      transformations:
+        raster_image:
+          format: webp
+          quality: 82
+          width: 2000
+          height: 2000
+
+slug:
+  encoding: unicode
+  clean_accents: false
+
+output:
+  omit_empty_optional_fields: true
+
+collections:
+  - name: works
+    label: 作品
+    label_singular: 作品
+    folder: src/content/works
+    extension: md
+    format: frontmatter
+    create: true
+    delete: true
+    identifier_field: title
+    summary: "{{year}}　{{title}}"
+    sortable_fields: [order, year, title]
+    fields:
+      - { label: 作品名稱, name: title, widget: string }
+      - { label: 英文名稱, name: titleEn, widget: string, required: false }
+      - { label: 年份, name: year, widget: number, value_type: int }
+      - { label: 首頁排序（數字小的在前）, name: order, widget: number, value_type: int, default: 99 }
+      - { label: 公開到網站, name: public, widget: boolean, default: false }
+      - label: 類別
+        name: category
+        widget: select
+        options: [裝置, 展演, 聲音作品, 作品, 研究計畫, 工作坊]
+      - { label: 媒材, name: medium, widget: string }
+      - { label: 尺寸, name: dimensions, widget: string, required: false }
+      - { label: 時長, name: duration, widget: string, required: false }
+      - { label: YouTube 影片連結, name: video, widget: string, required: false }
+      - { label: 封面圖（首頁也會用）, name: cover, widget: image }
+      - { label: 其他照片, name: images, widget: image, multiple: true, required: false }
+      - { label: 簡短介紹, name: short, widget: text, required: false }
+      - { label: 創作論述（段落之間空一行）, name: statement, widget: text }
+      - { label: 詳細介紹, name: body, widget: markdown, required: false }
+
+  - name: site
+    label: 關於與展演
+    files:
+      - name: site
+        label: 關於我、展演紀錄、聯絡方式
+        file: src/data/site.json
+        fields:
+          - { label: 中文姓名, name: name, widget: string }
+          - { label: 英文姓名, name: nameEn, widget: string }
+          - { label: 一句話介紹, name: tagline, widget: text }
+          - { label: 自我介紹段落, name: bio, widget: list, field: { label: 段落, name: paragraph, widget: text } }
+          - label: 展演紀錄
+            name: exhibitions
+            widget: list
+            fields:
+              - { label: 年份, name: year, widget: number, value_type: int }
+              - { label: 展覽名稱, name: name, widget: string }
+              - { label: 地點, name: venue, widget: string }
+              - { label: 類型, name: type, widget: string }
+              - label: 展出作品
+                name: works
+                widget: relation
+                collection: works
+                value_field: "{{slug}}"
+                search_fields: [title]
+                display_fields: [title]
+                multiple: true
+                required: false
+          - label: 學歷
+            name: education
+            widget: list
+            fields:
+              - { label: 名稱, name: name, widget: string }
+              - { label: 說明, name: note, widget: text }
+          - { label: Email, name: email, widget: string }
+          - label: Instagram
+            name: instagram
+            widget: object
+            fields:
+              - { label: 帳號, name: handle, widget: string }
+              - { label: 連結, name: url, widget: string }
